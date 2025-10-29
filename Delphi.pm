@@ -5,6 +5,7 @@ use Carp 'croak';
 use Date::Parse 'str2time';
 use IO::Socket::SSL;
 use Mojo::DOM;
+use Mojo::JSON 'decode_json';
 use Mojo::URL;
 use Mojo::UserAgent;
 use Readonly::Tiny 'Readonly';
@@ -13,6 +14,8 @@ use WWW::Mechanize::PhantomJS;
 
 Readonly my $forums_url   => 'https://forums.delphiforums.com';
 Readonly my $profiles_url => 'https://profiles.delphiforums.com';
+
+my %archive_cache;
 
 sub new ( $package, $self ) {
     for ( qw( forum username password ) ) {
@@ -379,19 +382,75 @@ sub pull_binary ( $self, $url, $filename ) {
     $self->login;
 
     my $result;
+    my $used_archive;
     try {
         $result = $self->{ua}->get($url)->result;
     }
     catch ($e) {}
+
+    if ( not ( $result and $result->code == 200 ) ) {
+        if ( not $result or $result->code =~ /^40[34]$/ ) {
+            if ( my $archive_url = $self->_archive_snapshot($url) ) {
+                try {
+                    my $archive_result = $self->{ua}->get($archive_url)->result;
+                    if ( $archive_result and $archive_result->code == 200 ) {
+                        $result       = $archive_result;
+                        $used_archive = 1;
+                    }
+                    elsif ($archive_result) {
+                        $result = $archive_result;
+                    }
+                }
+                catch ($e) {}
+            }
+        }
+    }
 
     if ( $result and $result->code == 200 ) {
         open( my $output, '>', $filename ) or die "$!: $filename\n";
         binmode( $output, ':raw' );
         print $output $result->body;
         close $output;
+        print "      Recovered via Internet Archive\n" if ($used_archive);
     }
 
     return ($result) ? $result->code : 0;
+}
+
+sub _archive_snapshot ( $self, $url ) {
+    return $archive_cache{$url} if ( exists $archive_cache{$url} );
+
+    my $api_url = Mojo::URL->new('https://web.archive.org/cdx/search/cdx')->query(
+        {
+            url    => $url,
+            output => 'json',
+            filter => 'statuscode:200',
+            limit  => 1,
+        }
+    );
+
+    my $response;
+    try {
+        $response = $self->{ua}->get($api_url)->result;
+    }
+    catch ($e) {
+        return ( $archive_cache{$url} = undef );
+    }
+
+    return ( $archive_cache{$url} = undef ) unless ( $response and $response->code == 200 );
+
+    my $data = eval { decode_json( $response->body ) };
+    return ( $archive_cache{$url} = undef ) unless ( ref($data) eq 'ARRAY' and @$data > 1 );
+
+    my $row = $data->[1];
+    return ( $archive_cache{$url} = undef ) unless ( ref($row) eq 'ARRAY' and @$row >= 3 );
+
+    my $timestamp = $row->[1];
+    my $original  = $row->[2] || $url;
+    return ( $archive_cache{$url} = undef ) unless ($timestamp);
+
+    my $archive_url = Mojo::URL->new("https://web.archive.org/web/$timestamp/$original")->to_string;
+    return ( $archive_cache{$url} = $archive_url );
 }
 
 sub get_updated_list ( $self, $days = 7 ) {

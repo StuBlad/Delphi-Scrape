@@ -17,13 +17,16 @@ my $settings = options( qw(
 
 # input validation
 pod2usage( '-verbose' => 1 ) if ( $settings->{'help'} );
+my $has_credentials = scalar grep {
+    defined $settings->{$_} and length $settings->{$_}
+} qw( username password forum );
+my $clean_only = $settings->{clean} && !$has_credentials;
+
 pod2usage(
     '-exitstatus' => 2,
     '-verbose'    => 0,
-    '-msg'        => 'Not all required fields properly defined',
-) if ( scalar grep { not (
-    defined $settings->{$_} and length $settings->{$_}
-) } qw( username password forum ) );
+    '-msg'        => 'Not all required fields properly defined (use --clean to clear existing data without scraping)',
+) if ( not $clean_only and $has_credentials < 3 );
 
 $SIG{__WARN__} = sub {
     die join( "\n",
@@ -60,6 +63,11 @@ if ( $settings->{clean} ) {
 }
 
 make_path( $settings->{store} . '/' . $_ ) for ( qw( threads profiles files ) );
+
+if ($clean_only) {
+    say 'Store cleaned.';
+    exit 0;
+}
 
 if ( $settings->{refresh} and $settings->{refresh} =~ /[A-z]/ ) {
     my @mtimes;

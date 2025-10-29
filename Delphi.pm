@@ -221,20 +221,22 @@ sub thread_data ( $self, $current_thread = $self->most_recent_thread ) {
                     my @options;
 
                     if ($options_table) {
-                        my @rows = $options_table->find('tr')->to_array;
+                        my @rows = $options_table->find('tr')->each;
                         for ( my $i = 0; $i < @rows; $i++ ) {
                             my $row = $rows[$i];
+                            next unless ( $row and ref $row and $row->can('at') );
                             my $label_cell = $row->at('td');
                             next unless ($label_cell);
 
                             my $label = $label_cell->all_text;
                             $label =~ s/\s+/ /g;
                             $label =~ s/(^\s+|\s+$)//g;
+                            next unless length $label;
 
                             my $stats_row = ( $i + 1 < @rows ) ? $rows[ $i + 1 ] : undef;
                             my ( $votes, $percent );
                             if ($stats_row) {
-                                my $stats_text = $stats_row->all_text // q{};
+                                my $stats_text = ( $stats_row->can('all_text') ) ? $stats_row->all_text : q{};
                                 $stats_text =~ s/\s+/ /g;
                                 if ( $stats_text =~ /([\d,]+)\s*votes/i ) {
                                     ( $votes = $1 ) =~ s/,//g;

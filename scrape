@@ -3,7 +3,7 @@ use exact;
 
 use Digest::SHA 'sha1_hex';
 use File::Find 'find';
-use File::Path 'make_path';
+use File::Path qw( make_path remove_tree );
 use Util::CommandLine qw( options pod2usage );
 use YAML::XS qw( DumpFile LoadFile );
 
@@ -46,19 +46,7 @@ if ( $settings->{clean} ) {
         qw( threads profiles files )
     ) {
         next unless ( -d $path );
-        opendir( my $dirh, $path ) or die "Unable to open directory $path: $!\n";
-        while ( my $entry = readdir($dirh) ) {
-            next if ( $entry =~ /^\./ );
-            my $target = "$path/$entry";
-            if ( -d $target ) {
-                require File::Path;
-                File::Path::remove_tree( $target );
-            }
-            else {
-                unlink($target);
-            }
-        }
-        closedir($dirh);
+        remove_tree( $path, { keep_root => 1 } );
     }
 }
 

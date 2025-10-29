@@ -12,7 +12,7 @@ use lib "$FindBin::Bin";
 use Delphi;
 
 my $settings = options( qw(
-    username|user|u=s password|passwd|pass|p=s forum|f=s store|s=s lag|l=f refresh|r=s
+    username|user|u=s password|passwd|pass|p=s forum|f=s store|s=s lag|l=f refresh|r=s clean!
 ) );
 
 # input validation
@@ -36,6 +36,28 @@ $SIG{__WARN__} = sub {
 
 $settings->{lag}   //= 1.5;
 $settings->{store} //= 'store';
+
+if ( $settings->{clean} ) {
+    for my $path (
+        map { $settings->{store} . '/' . $_ }
+        qw( threads profiles files )
+    ) {
+        next unless ( -d $path );
+        opendir( my $dirh, $path ) or die "Unable to open directory $path: $!\n";
+        while ( my $entry = readdir($dirh) ) {
+            next if ( $entry =~ /^\./ );
+            my $target = "$path/$entry";
+            if ( -d $target ) {
+                require File::Path;
+                File::Path::remove_tree( $target );
+            }
+            else {
+                unlink($target);
+            }
+        }
+        closedir($dirh);
+    }
+}
 
 make_path( $settings->{store} . '/' . $_ ) for ( qw( threads profiles files ) );
 
@@ -194,6 +216,12 @@ Print a brief help message and exits.
 =item B<-man>
 
 Prints the manual page and exits.
+
+=item B<-clean>
+
+Remove existing files from the threads/profiles/files subdirectories under the
+store path before scraping. Handy when you want to start from a fresh export of
+the forum. Directories themselves are kept in place.
 
 =back
 

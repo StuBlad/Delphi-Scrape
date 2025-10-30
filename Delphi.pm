@@ -296,10 +296,15 @@ sub thread_data ( $self, $current_thread = $self->most_recent_thread ) {
                     $poll = undef unless ( $poll and keys %$poll );
                 }
 
-                ( my $from = $msg->at('td.msgFname')->all_text ) =~ s/(^\s+|\s+$)//g;
-                ( my $to   = $msg->at('td.msgTname')->all_text ) =~ s/(^\s+|\s+$)//g;
-                $from =~ s/\s/ /g;
-                $to   =~ s/\s/ /g;
+                my $from = $msg->at('td.msgFname')->all_text // q{};
+                $from =~ s/\s+/ /g;
+                $from =~ s/(^\s+|\s+$)//g;
+                my $from_unread = $from =~ s/\s+unread$//i ? 1 : 0;
+
+                my $to = $msg->at('td.msgTname')->all_text // q{};
+                $to =~ s/\s+/ /g;
+                $to =~ s/(^\s+|\s+$)//g;
+                my $to_unread = $to =~ s/\s+unread$//i ? 1 : 0;
 
                 +{
                     %ids,
@@ -320,6 +325,8 @@ sub thread_data ( $self, $current_thread = $self->most_recent_thread ) {
                             };
                         } $msg->find('li.os-attachment')->each
                     ],
+                    ( $from_unread ? ( from_status => 'unread' ) : () ),
+                    ( $to_unread   ? ( to_status   => 'unread' ) : () ),
                     ( $poll ? ( poll => $poll ) : () ),
                 };
             }

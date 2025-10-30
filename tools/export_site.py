@@ -455,6 +455,11 @@ footer {
     margin: 0.35rem 0;
 }
 
+.msg-status {
+    color: #9923AE;
+    font-weight: 600;
+}
+
 .notice {
     background: #fff4ce;
     color: #614715;
@@ -530,12 +535,20 @@ def format_folder_date(timestamp: Optional[dt.datetime]) -> str:
     return f"{timestamp.month:02d}/{timestamp.day:02d}/{timestamp.year:04d}"
 
 
-def format_name_html(name: Optional[str], primary_class: str) -> str:
+def format_name_html(
+    name: Optional[str],
+    primary_class: str,
+    status: Optional[str] = None,
+) -> str:
     raw = (name or "").strip()
+    local_status = status
     if not raw:
         primary = "Unknown"
         extra = ""
     else:
+        if not local_status and raw.lower().endswith(" unread"):
+            raw = raw[: -len("unread")].rstrip()
+            local_status = "unread"
         primary = raw
         extra = ""
         if raw.endswith(")") and "(" in raw:
@@ -544,11 +557,18 @@ def format_name_html(name: Optional[str], primary_class: str) -> str:
             if segment.count("(") == segment.count(")"):
                 primary = raw[:idx].strip() or raw
                 extra = segment
+    if local_status and local_status.lower() == "unread":
+        local_status = "unread"
     primary_html = f'<span class="{primary_class}">{html.escape(primary)}</span>'
     extra_html = (
         f' <span class="msg-recipient-extra">{html.escape(extra)}</span>' if extra else ""
     )
-    return primary_html + extra_html
+    status_html = (
+        f' <span class="msg-status">{html.escape(local_status)}</span>'
+        if local_status
+        else ""
+    )
+    return primary_html + extra_html + status_html
 
 
 def render_thread_card(thread: Mapping, *, href_prefix: str) -> str:
@@ -917,8 +937,12 @@ def render_messages(
         anchor = f"msg-{mid.replace('.', '-')}"
         raw_author = msg.get("from") or "Unknown"
         raw_recipient = msg.get("to") or "All"
-        author_html = format_name_html(raw_author, "msg-author-name")
-        recipient_html = format_name_html(raw_recipient, "msg-recipient-name")
+        author_html = format_name_html(
+            raw_author, "msg-author-name", msg.get("from_status")
+        )
+        recipient_html = format_name_html(
+            raw_recipient, "msg-recipient-name", msg.get("to_status")
+        )
         posted_raw = msg.get("date") or ""
         posted_dt = parse_date(posted_raw)
         date_display = format_date_short(posted_dt) if posted_dt else posted_raw

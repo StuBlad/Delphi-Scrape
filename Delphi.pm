@@ -236,6 +236,16 @@ sub thread_data ( $self, $current_thread = $self->most_recent_thread ) {
                             $label =~ s/(^\s+|\s+$)//g;
                             next unless length $label;
 
+                            my $bar_class;
+                            if ( my $bar_cell = $row->find('td')->grep( sub {
+                                my $class = $_->attr('class') // q{};
+                                $class =~ /\bpollbar\d+\b/;
+                            } )->first ) {
+                                my $class_attr = $bar_cell->attr('class') // q{};
+                                ($bar_class) = $class_attr =~ /(pollbar\d+)/;
+                                $bar_class //= $class_attr;
+                            }
+
                             my $stats_row = ( $i + 1 < @rows ) ? $rows[ $i + 1 ] : undef;
                             my ( $votes, $percent );
                             if ($stats_row) {
@@ -256,6 +266,7 @@ sub thread_data ( $self, $current_thread = $self->most_recent_thread ) {
                                     ( length $label ? ( label => $label ) : () ),
                                     ( defined $votes ? ( votes => +$votes ) : () ),
                                     ( defined $percent ? ( percent => $percent ) : () ),
+                                    ( $bar_class ? ( bar_class => $bar_class ) : () ),
                                 }
                             );
                         }
